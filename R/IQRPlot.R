@@ -46,10 +46,11 @@
 #'
 #' @export
 #'
-IQRPlot <- function(WH.list, IQR.cut = 0.1, median.cut = 0.02, grid = TRUE, ncol = NULL, align = c("hv", "h", "v", "none")) {
+IQRPlot <- function(WH.list, IQR.cut = 0.1, median.cut = 0.01, grid = TRUE, ncol = NULL, align = c("hv", "h", "v", "none")) {
   WH.list <- WH.list[!sapply(WH.list, is.null)]
+  
   ls_pl <- lapply(WH.list, function(WH) {
-    # normalize H by col to calculate IQR for each k
+    # Normalize H by column to calculate IQR for each k
     Ks <- sub(".*_K([0-9]+)_P[0-9]+$", "\\1", rownames(WH$H))
     H <- split(data.frame(WH$H, check.names = FALSE), Ks) %>%
       lapply(function(sub_H) {
@@ -61,21 +62,43 @@ IQRPlot <- function(WH.list, IQR.cut = 0.1, median.cut = 0.02, grid = TRUE, ncol
         names(.) <- NULL
         do.call(what = rbind, args = .)
       }
-
-
-    df_pl <- tidyr::gather(data.frame(t(H), check.names = FALSE), "Program", "Ratio")
+    
+    df_pl <- tidyr::gather(data.frame(t(H)), "Program", "Ratio")
     mat_quat <- apply(H, 1, quantile)
+    
+    # Logical indices for median and IQR thresholds
     idx_median <- mat_quat["50%", ] > median.cut
     idx_IQR <- mat_quat["75%", ] - mat_quat["25%", ] > IQR.cut
-    df_pl$Keep <- ifelse(df_pl$Program %in% colnames(mat_quat)[idx_median & idx_IQR], "Keep", "Remove")
-    df_pl$K <- sub(".*_K([0-9]+)_P[0-9]+$", "\\1", df_pl$Program)
+    
+    # Group rows based on thresholds
+    df_pl$Program <- gsub("\\.", "-", df_pl$Program)
+    df_pl$Group <- with(df_pl, ifelse(
+      df_pl$Program %in% colnames(mat_quat)[idx_median & idx_IQR], "Keep",
+      ifelse(df_pl$Program %in% colnames(mat_quat)[!idx_IQR & idx_median], "Low IQR",
+      ifelse(df_pl$Program %in% colnames(mat_quat)[idx_IQR & !idx_median], "Low Median",
+             "Low IQR & Median")
+      )
+    ))
+    
+    df_pl$K <- sub(".*_K([0-9]+)_P[0-9]+$", "\\1", df_pl$Program) # Extract K value
+    df_pl$K <- as.numeric(df_pl$K)
     sam <- gsub("_K[0-9]+_P[0-9]+$", "", df_pl$Program[1])
+    
+    # Order programs by median value for plotting
     df_pl$Program <- factor(df_pl$Program, levels = colnames(mat_quat)[order(mat_quat["50%", ])])
-    col_box <- c("Keep" = "#1F77B4", "Remove" = "#D62728")
-
+    
+    # Define color palette for groups
+    col_box <- c(
+      "Keep" = "#1F77B4",
+      "Low IQR" = "#FF7F0E",
+      "Low Median" = "#9467BD",
+      "Low IQR & Median" =  "#D62728"
+    )
+    
+    # Create the plot
     p <- ggplot(df_pl, aes(Program, Ratio)) +
       geom_boxplot(outlier.shape = NA) +
-      geom_jitter(aes(color = Keep), alpha = 0.4, width = 0.2, size = 0) +
+      geom_jitter(aes(color = Group), alpha = 0.4, width = 0.2, size = 0) +
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
       guides(color = guide_legend(override.aes = list(size = 3, alpha = 1))) +
       ylab("Normalized Usage") +
@@ -83,9 +106,10 @@ IQRPlot <- function(WH.list, IQR.cut = 0.1, median.cut = 0.02, grid = TRUE, ncol
       facet_grid(~K, drop = TRUE, scales = "free", space = "free") +
       theme(plot.title = element_text(hjust = 0.5)) +
       scale_color_manual(values = col_box)
-
+    
     return(p)
   })
+  
   if (grid) {
     if (is.null(ncol)) {
       ncol <- round(sqrt(length(WH.list)))
