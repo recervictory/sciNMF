@@ -34,7 +34,7 @@ To install the sciNMF package, you can run the following commands in R:
 if(!requireNamespace("devtools", quietly = TRUE)){
     install.packages("devtools") 
 } 
-devtools::install_github('Tang-RH/sciNMF')
+devtools::install_github('recervictory/sciNMF')
 ```
 
 Alternatively, you can download the [release package](https://github.com/Tang-RH/sciNMF/releases/download/0.1.2/sciNMF_0.1.2.tar.gz) and perform a local installation runing the following command in R:
